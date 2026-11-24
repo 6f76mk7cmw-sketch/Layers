@@ -115,6 +115,8 @@ input,select{font:inherit;font-size:16px;width:100%;min-height:44px;padding:0 12
     <div class="card">
       <div class="seg" id="bodySeg"><button data-o="3">I run cold</button><button data-o="0">About average</button><button data-o="-3">I run warm</button></div>
       <p class="note" id="offsetNote"></p>
+      <p style="margin:16px 0 8px;font-weight:600">I like wearing</p>
+      <div class="seg" id="legSeg"><button data-l="trousers">Trousers</button><button data-l="skirt">Skirts with tights</button><button data-l="both">Show both</button></div>
       <p style="margin:16px 0 8px;font-weight:600">How did the last outfit feel?</p>
       <div class="seg" id="fb"><button data-n="1">Too cold</button><button data-n="0">Just right</button><button data-n="-1">Too warm</button></div>
       <p class="note" id="fbNote">Each answer shifts the suggestions by 1°C, so it learns your comfort zone.</p>
@@ -128,7 +130,7 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const store={get(k,d){try{const v=localStorage.getItem('layers.'+k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem('layers.'+k,JSON.stringify(v))}catch(e){}}};
 
-let body=store.get('body',3), nudge=store.get('nudge',0), place=store.get('place',null);
+let legs=store.get('legs','both'), body=store.get('body',3), nudge=store.get('nudge',0), place=store.get('place',null);
 let day=0, data=null, mode='manual';
 let from=store.get('from',8), to=store.get('to',18);
 
@@ -160,17 +162,21 @@ function suggest(w){
  let coat=lo<3?'Heavy insulated coat':lo<8?'Warm wool or padded coat':lo<13?'Medium jacket':lo<18?'Light jacket':'';
  if(rainy)coat=coat?(lo<8?'Padded waterproof coat with a hood':'Waterproof jacket with a hood'):'Light rain jacket';
  if(coat)out.push({k:rainy?'rain':'coat',s:'Outer layer',n:coat,y:windy?'Windproof if you have one, it will be gusty':rainy?'Rain is likely while you are out':''});
- out.push({k:'trousers',s:'Bottoms',n:hi<5?'Warm trousers, thermal leggings underneath':hi<15?'Full-length trousers or jeans':hi<22?'Trousers or a midi skirt':'Light trousers, a skirt or shorts',y:''});
- const boots=w.snow||w.rain>=60||lo<5;
- out.push({k:boots?'boot':'shoe',s:'Shoes',n:w.snow?'Waterproof boots with grip':w.rain>=60?'Waterproof boots or shoes':lo<5?'Boots and warm socks':hi<20?'Closed shoes or trainers':'Trainers or sandals',y:''});
+ const trs=hi<5?'Warm trousers, thermal leggings underneath':hi<15?'Full-length trousers or jeans':hi<22?'Light trousers or chinos':'Light trousers or shorts';
+ const skt=hi<5?'Wool or thick skirt with fleece-lined thermal tights':hi<10?'Skirt with thermal tights':hi<15?'Skirt with thick opaque tights (80+ denier)':hi<22?'Skirt or dress with sheer tights or bare legs':'Light skirt or dress';
+ out.push({k:'trousers',s:'Bottoms',n:legs==='skirt'?skt:trs,y:legs==='both'?'Or: '+skt.charAt(0).toLowerCase()+skt.slice(1):''});
+ const muddy=w.rain>=50, boots=w.snow||muddy||lo<5;
+ const shoe=w.snow?'Waterproof boots with good grip':muddy?(lo<5?'Wellies, walking boots or any waterproof boots, with warm socks':'Wellies, walking boots or any waterproof shoes'):lo<5?(legs==='skirt'?'Knee-high or ankle boots, warm socks over tights':'Boots and warm socks'):hi<20?'Closed shoes or trainers':'Trainers or sandals';
+ const shoeWhy=w.snow?'Icy and slippery underfoot':muddy?'Wet and muddy out, so leave suede, canvas and mesh trainers at home':w.rain>=30?'Pick a pair that copes with puddles':'';
+ out.push({k:boots?'boot':'shoe',s:'Shoes',n:shoe,y:shoeWhy});
  const extra=[];
- if(lo<7)extra.push(['scarf','Scarf']);
+ if(lo<7)extra.push(['scarf','Keep your neck warm','A scarf, snood or high-neck top. No need if your coat zips or buttons up to your chin']);
  if(lo<3)extra.push(['hat','Warm hat']);
  if(lo<2)extra.push(['gloves','Gloves']);
  if(wet&&!gale)extra.push(['umbrella',w.rain>=60?'Umbrella':'Small umbrella in your bag']);
  if(wet&&gale)extra.push(['umbrella','Use your hood, too windy for an umbrella']);
  if(hi>=23)extra.push(['sun','Sunglasses and water']);
- for(const [k,n] of extra)out.push({k,s:'Extra',n,y:''});
+ for(const [k,n,y] of extra)out.push({k,s:'Extra',n,y:y||''});
  const b=bandOf(lo);
  let head=b[1]+(hi-lo>=6&&bandOf(hi)[1]!==b[1]?' to '+bandOf(hi)[1].toLowerCase():'');
  head+=rainy?', with rain':w.snow?', with snow':gale?' and windy':'';
@@ -194,6 +200,7 @@ function render(){
  const off=body+nudge;
  $('offsetNote').textContent=off===0?'Using the forecast as it is.':`Dressing you as if it is ${Math.abs(off)}°C ${off>0?'colder':'warmer'} than forecast.`;
  for(const b of $('bodySeg').children)b.setAttribute('aria-pressed',String(+b.dataset.o===body));
+ for(const b of $('legSeg').children)b.setAttribute('aria-pressed',String(b.dataset.l===legs));
  for(const b of $('daySeg').children)b.setAttribute('aria-pressed',String(+b.dataset.d===day));
 }
 
@@ -261,6 +268,7 @@ $('from').onchange=e=>{from=+e.target.value;store.set('from',from);render();};
 $('to').onchange=e=>{to=+e.target.value;store.set('to',to);render();};
 $('daySeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;day=+b.dataset.d;render();};
 $('bodySeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;body=+b.dataset.o;store.set('body',body);render();};
+$('legSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;legs=b.dataset.l;store.set('legs',legs);render();};
 $('fb').onclick=e=>{const b=e.target.closest('button');if(!b)return;const n=+b.dataset.n;nudge=Math.max(-5,Math.min(5,nudge+n));store.set('nudge',nudge);$('fbNote').textContent=n===0?'Great, keeping things as they are.':`Got it. Shifted by 1°C ${n>0?'warmer clothes':'lighter clothes'} from now on.`;render();};
 for(const id of ['mlo','mhi','mrain','mwind'])$(id).oninput=render;
 $('changeLoc').onclick=()=>{$('search').hidden=false;$('city').focus();};
